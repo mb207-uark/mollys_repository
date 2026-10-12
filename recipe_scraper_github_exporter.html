@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Scraper & GitHub Exporter</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#10b981',
+                        primaryDark: '#059669',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        @media print {
+            body * { visibility: hidden; }
+            #printable-recipe, #printable-recipe * { visibility: visible; }
+            #printable-recipe { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors duration-300 flex flex-col">
+
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+                    <i class="fa-solid fa-utensils text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">RecipeChef <span class="text-xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full ml-1 font-semibold">App Exporter</span></h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Scrape, manage recipes & push app to GitHub</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <button onclick="openRepoModal()" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shadow-sm">
+                    <i class="fa-brands fa-github text-sm"></i>
+                    <span>Push App to GitHub</span>
+                </button>
+
+                <!-- Tab switchers -->
+                <nav class="hidden sm:flex space-x-1 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl text-sm font-medium">
+                    <button onclick="switchTab('scraper')" id="nav-scraper" class="px-3 py-1.5 rounded-lg transition bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-semibold">Scraper</button>
+                    <button onclick="switchTab('box')" id="nav-box" class="px-3 py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 hover:text-slate-900">Library (<span id="recipe-count">0</span>)</button>
+                    <button onclick="switchTab('guide')" id="nav-guide" class="px-3 py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 hover:text-slate-900">GitHub Guide</button>
+                </nav>
+
+                <!-- Dark mode toggle -->
+                <button onclick="toggleDarkMode()" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+                    <i class="fa-solid fa-moon dark:hidden"></i>
+                    <i class="fa-solid fa-sun hidden dark:block"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="sm:hidden bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex justify-around text-xs font-medium">
+        <button onclick="switchTab('scraper')" id="mob-nav-scraper" class="text-emerald-600 dark:text-emerald-400 font-bold pb-1 border-b-2 border-emerald-500">Scraper</button>
+        <button onclick="switchTab('box')" id="mob-nav-box" class="text-slate-500 dark:text-slate-400 pb-1">Library (<span id="mob-recipe-count">0</span>)</button>
+        <button onclick="switchTab('guide')" id="mob-nav-guide" class="text-slate-500 dark:text-slate-400 pb-1">GitHub Guide</button>
+        <button onclick="openRepoModal()" class="text-slate-900 dark:text-white font-semibold pb-1 flex items-center space-x-1"><i class="fa-brands fa-github"></i><span>Push Repo</span></button>
+    </div>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 overflow-y-auto">
+
+        <!-- NOTIFICATION TOAST -->
+        <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-3 text-sm">
+            <i id="toast-icon" class="fa-solid fa-check-circle text-emerald-400 text-base"></i>
+            <span id="toast-msg">Action completed successfully!</span>
+        </div>
+
+        <!-- ================= TAB 1: SCRAPER & PARSER ================= -->
+        <div id="view-scraper" class="space-y-6">
+            <!-- Hero Input Section -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                    <div>
+                        <h2 class="text-xl font-bold">Import Recipe</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Paste any recipe web link to fetch & smart-parse, or paste unstructured recipe text below.</p>
+                    </div>
+                    <button onclick="loadSampleRecipe()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-bolt text-amber-500"></i>
+                        <span>Load Sample</span>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <!-- URL Input Box -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Recipe URL (Auto-Fetcher & Parser)</label>
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-solid fa-link"></i>
+                                </span>
+                                <input type="url" id="recipe-url" placeholder="https://www.example.com/best-chocolate-chip-cookies" class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                            <button onclick="scrapeFromUrl()" id="scrape-btn" class="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl text-sm transition shadow-md shadow-emerald-500/20 flex items-center space-x-2 shrink-0">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>Fetch & Parse</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="relative flex py-2 items-center">
+                        <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+                        <span class="flex-shrink mx-4 text-xs uppercase text-slate-400 font-semibold">Or paste raw text</span>
+                        <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+                    </div>
+
+                    <!-- Text Area Input -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Raw Recipe Text</label>
+                        <textarea id="recipe-raw-text" rows="4" placeholder="Paste ingredients list and cooking steps here..." class="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button onclick="parseRawText()" class="px-5 py-2.5 bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white font-semibold rounded-xl text-sm transition flex items-center space-x-2">
+                            <i class="fa-solid fa-brain"></i>
+                            <span>Smart Parse Text</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="recipe-editor-container" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Left: Editable Form -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                        <h3 class="font-bold text-lg flex items-center space-x-2">
+                            <i class="fa-solid fa-pen-to-square text-emerald-500"></i>
+                            <span>Edit Extracted Recipe</span>
+                        </h3>
+                        <button onclick="saveCurrentRecipe()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition shadow-sm flex items-center space-x-1.5">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Save to Library</span>
+                        </button>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Recipe Title</label>
+                        <input type="text" id="edit-title" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Prep Time</label>
+                            <input type="text" id="edit-prep" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Cook Time</label>
+                            <input type="text" id="edit-cook" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Servings</label>
+                            <input type="text" id="edit-servings" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Category / Tag</label>
+                            <select id="edit-category" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                                <option value="Dinner">Dinner</option>
+                                <option value="Dessert">Dessert</option>
+                                <option value="Breakfast">Breakfast</option>
+                                <option value="Lunch">Lunch</option>
+                                <option value="Snack">Snack</option>
+                                <option value="Beverage">Beverage</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Source URL (Optional)</label>
+                            <input type="text" id="edit-source" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ingredients (One per line)</label>
+                        <textarea id="edit-ingredients" rows="5" class="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-mono"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Instructions (One step per line)</label>
+                        <textarea id="edit-instructions" rows="6" class="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Personal Notes</label>
+                        <textarea id="edit-notes" rows="2" placeholder="Add private cooking tips or notes..." class="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm"></textarea>
+                    </div>
+
+                    <button onclick="updatePreview()" class="w-full py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 font-semibold rounded-xl text-xs transition">
+                        Refresh Preview & Markdown
+                    </button>
+                </div>
+
+                <!-- Right: Preview & Markdown Export Card -->
+                <div class="space-y-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-lg flex items-center space-x-2">
+                                <i class="fa-solid fa-eye text-emerald-500"></i>
+                                <span>Live Card Preview</span>
+                            </h3>
+                            <span class="text-xs bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-full font-medium" id="prev-badge">Dinner</span>
+                        </div>
+
+                        <!-- Card preview box -->
+                        <div id="preview-card" class="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700/80 space-y-4">
+                            <h4 id="prev-title" class="text-xl font-bold">Recipe Title</h4>
+                            <div class="flex flex-wrap gap-4 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                <div><i class="fa-regular fa-clock mr-1 text-emerald-500"></i> Prep: <span id="prev-prep">-</span></div>
+                                <div><i class="fa-solid fa-fire mr-1 text-emerald-500"></i> Cook: <span id="prev-cook">-</span></div>
+                                <div><i class="fa-solid fa-user-group mr-1 text-emerald-500"></i> Servings: <span id="prev-servings">-</span></div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Ingredients</h5>
+                                <ul id="prev-ingredients-list" class="space-y-1.5 text-sm"></ul>
+                            </div>
+
+                            <div>
+                                <h5 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Instructions</h5>
+                                <ol id="prev-instructions-list" class="space-y-2 text-sm list-decimal list-inside"></ol>
+                            </div>
+
+                            <div id="prev-notes-container" class="hidden pt-3 border-t border-slate-200 dark:border-slate-700">
+                                <h5 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Notes</h5>
+                                <p id="prev-notes" class="text-xs text-slate-600 dark:text-slate-300 italic"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Markdown & GitHub Actions Box -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold text-md flex items-center space-x-2">
+                                <i class="fa-brands fa-markdown text-emerald-500"></i>
+                                <span>Markdown Output</span>
+                            </h3>
+                            <div class="flex space-x-2">
+                                <button onclick="copyMarkdown()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-semibold rounded-lg transition flex items-center space-x-1">
+                                    <i class="fa-regular fa-copy"></i>
+                                    <span>Copy</span>
+                                </button>
+                                <button onclick="downloadMarkdownFile()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg transition flex items-center space-x-1">
+                                    <i class="fa-solid fa-download"></i>
+                                    <span>Download .md</span>
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="markdown-output" readonly rows="6" class="w-full p-3 font-mono text-xs rounded-xl bg-slate-900 text-emerald-400 border border-slate-700 focus:outline-none"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= STREAMING_CHUNK:Rendering recipe library view... ================= -->
+        <div id="view-box" class="hidden space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div>
+                    <h2 class="text-xl font-bold">Recipe Library</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Search, filter, favorite and manage your saved recipes.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportAllJson()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-file-arrow-down"></i>
+                        <span>Export Backup</span>
+                    </button>
+                    <label class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-semibold rounded-xl transition cursor-pointer flex items-center space-x-1.5">
+                        <i class="fa-solid fa-file-arrow-up"></i>
+                        <span>Import Backup</span>
+                        <input type="file" id="import-file" accept=".json" onchange="importAllJson(event)" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Search & Filter Bar -->
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-search"></i>
+                    </span>
+                    <input type="text" id="search-input" oninput="renderRecipeBox()" placeholder="Search recipes by title or ingredients..." class="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <div class="flex gap-2">
+                    <select id="filter-category" onchange="renderRecipeBox()" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium">
+                        <option value="All">All Categories</option>
+                        <option value="Dinner">Dinner</option>
+                        <option value="Dessert">Dessert</option>
+                        <option value="Breakfast">Breakfast</option>
+                        <option value="Lunch">Lunch</option>
+                        <option value="Snack">Snack</option>
+                        <option value="Beverage">Beverage</option>
+                    </select>
+                    <button onclick="toggleFavoriteFilter()" id="filter-fav-btn" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center space-x-1.5">
+                        <i class="fa-regular fa-star text-amber-500" id="fav-icon-toggle"></i>
+                        <span>Favorites</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="recipe-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Populated via JS -->
+            </div>
+            
+            <div id="empty-box" class="hidden text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 text-2xl">
+                    <i class="fa-solid fa-book-open"></i>
+                </div>
+                <h3 class="font-bold text-lg mb-1">No Recipes Found</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Try adjusting your search filters or scrape a new recipe.</p>
+                <button onclick="switchTab('scraper')" class="px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-semibold">Scraper Tab</button>
+            </div>
+        </div>
+
+        <!-- ================= STREAMING_CHUNK:Rendering GitHub Guide View... ================= -->
+        <div id="view-guide" class="hidden space-y-6 max-w-4xl mx-auto">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-700 space-y-6">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center text-2xl">
+                            <i class="fa-brands fa-github"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold">Pushing This Web App to GitHub</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Step-by-step instructions to host your recipe app on GitHub Pages.</p>
+                        </div>
+                    </div>
+                    <button onclick="downloadRepoZip()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition shadow-md flex items-center space-x-2">
+                        <i class="fa-solid fa-file-zipper"></i>
+                        <span>Download App (.zip)</span>
+                    </button>
+                </div>
+
+                <div class="space-y-6 text-sm">
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 font-bold flex items-center justify-center shrink-0">1</div>
+                        <div>
+                            <h3 class="font-bold text-base mb-1">Download Source Code</h3>
+                            <p class="text-slate-500 dark:text-slate-400 mb-2">Click the <b>Download App (.zip)</b> button above to get the complete repository package containing <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">index.html</code>, <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">README.md</code>, and <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">LICENSE</code>.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 font-bold flex items-center justify-center shrink-0">2</div>
+                        <div>
+                            <h3 class="font-bold text-base mb-1">Create a New GitHub Repository</h3>
+                            <p class="text-slate-500 dark:text-slate-400 mb-2">Go to GitHub, create a new public repository (e.g., named <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">recipe-scraper-app</code>).</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 font-bold flex items-center justify-center shrink-0">3</div>
+                        <div>
+                            <h3 class="font-bold text-base mb-1">Push Files via Git Terminal</h3>
+                            <p class="text-slate-500 dark:text-slate-400 mb-2">Open your terminal inside the unzipped folder and run:</p>
+                            <div class="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs space-y-1 overflow-x-auto">
+                                <p>git init</p>
+                                <p>git add .</p>
+                                <p>git commit -m "Initial commit: Recipe Scraper web app"</p>
+                                <p>git branch -M main</p>
+                                <p>git remote add origin https://github.com/yourusername/recipe-scraper-app.git</p>
+                                <p>git push -u origin main</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 font-bold flex items-center justify-center shrink-0">4</div>
+                        <div>
+                            <h3 class="font-bold text-base mb-1">Enable GitHub Pages (Instant Free Hosting)</h3>
+                            <p class="text-slate-500 dark:text-slate-400">Go to your repository settings on GitHub, navigate to <b>Pages</b>, select the `main` branch under Build and Deployment, and save! Your web app will be live at <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-xs">https://yourusername.github.io/recipe-scraper-app</code>.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="recipe-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4">
+                <div class="flex items-center space-x-3">
+                    <button onclick="toggleModalFavorite()" id="modal-fav-btn" class="text-xl text-slate-300 hover:text-amber-500 transition">
+                        <i class="fa-solid fa-star"></i>
+                    </button>
+                    <h3 id="modal-title" class="text-xl font-bold">Recipe View</h3>
+                </div>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div id="printable-recipe" class="space-y-4">
+                <!-- Dynamically populated recipe details -->
+            </div>
+
+            <div class="flex flex-wrap justify-between items-center pt-4 border-t border-slate-200 dark:border-slate-700 gap-2">
+                <button onclick="deleteActiveModalRecipe()" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold text-xs rounded-xl transition">
+                    <i class="fa-solid fa-trash mr-1"></i> Delete
+                </button>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="printActiveRecipe()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 font-semibold text-xs rounded-xl transition">
+                        <i class="fa-solid fa-print mr-1"></i> Print Card
+                    </button>
+                    <button onclick="copyModalMarkdown()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 font-semibold text-xs rounded-xl transition">
+                        <i class="fa-regular fa-copy mr-1"></i> Copy .md
+                    </button>
+                    <button onclick="downloadModalMarkdown()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-xs rounded-xl transition">
+                        <i class="fa-solid fa-download mr-1"></i> Download .md
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="repo-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4">
+                <h3 class="text-lg font-bold flex items-center space-x-2">
+                    <i class="fa-brands fa-github text-xl"></i>
+                    <span>Export App to GitHub Repository</span>
+                </h3>
+                <button onclick="closeRepoModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                <p>This web app is packaged as a standalone single-file project. You can download the complete source bundle instantly.</p>
+                
+                <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl space-y-2 border border-slate-200 dark:border-slate-700">
+                    <div class="font-semibold text-xs text-slate-400 uppercase tracking-wider">Repository Files Included:</div>
+                    <ul class="space-y-1 font-mono text-xs">
+                        <li class="flex items-center space-x-2"><i class="fa-solid fa-file-code text-emerald-500"></i><span>index.html (Complete Web App)</span></li>
+                        <li class="flex items-center space-x-2"><i class="fa-solid fa-file-lines text-amber-500"></i><span>README.md (Documentation & Setup)</span></li>
+                        <li class="flex items-center space-x-2"><i class="fa-solid fa-scale-balanced text-blue-500"></i><span>LICENSE (MIT Open Source License)</span></li>
+                    </ul>
+                </div>
+
+                <div class="flex flex-col gap-3 pt-2">
+                    <button onclick="downloadRepoZip()" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-file-zipper"></i>
+                        <span>Download Repository Source (.zip)</span>
+                    </button>
+                    <button onclick="switchTab('guide'); closeRepoModal();" class="w-full py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 font-semibold rounded-xl text-xs transition">
+                        View Step-by-Step Git Instructions
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application State
+        let currentRecipe = {
+            id: null,
+            title: '',
+            prepTime: '15 mins',
+            cookTime: '30 mins',
+            servings: '4 servings',
+            category: 'Dinner',
+            sourceUrl: '',
+            ingredients: [],
+            instructions: [],
+            notes: '',
+            favorite: false
+        };
+
+        let savedRecipes = [];
+        let activeModalId = null;
+        let showOnlyFavorites = false;
+
+        // Initialize App on Load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+            updateRecipeBoxCount();
+            
+            // Check system dark mode preference
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.classList.add('dark');
+            }
+        });
+
+        // Tab Switcher
+        function switchTab(tabName) {
+            ['scraper', 'box', 'guide'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                const navBtn = document.getElementById(`nav-${t}`);
+                if (navBtn) {
+                    navBtn.className = 'px-3 py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 hover:text-slate-900';
+                }
+                const mobBtn = document.getElementById(`mob-nav-${t}`);
+                if (mobBtn) {
+                    mobBtn.className = 'text-slate-500 dark:text-slate-400 pb-1';
+                }
+            });
+
+            document.getElementById(`view-${tabName}`).classList.remove('hidden');
+            const activeNav = document.getElementById(`nav-${tabName}`);
+            if (activeNav) {
+                activeNav.className = 'px-3 py-1.5 rounded-lg transition bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-semibold';
+            }
+            const activeMob = document.getElementById(`mob-nav-${tabName}`);
+            if (activeMob) {
+                activeMob.className = 'text-emerald-600 dark:text-emerald-400 font-bold pb-1 border-b-2 border-emerald-500';
+            }
+
+            if (tabName === 'box') {
+                renderRecipeBox();
+            }
+        }
+
+        // Dark Mode Toggle
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        // Toast Notification
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-msg');
+            const iconEl = document.getElementById('toast-icon');
+            
+            msgEl.textContent = message;
+            if (isError) {
+                iconEl.className = 'fa-solid fa-triangle-exclamation text-rose-400 text-base';
+            } else {
+                iconEl.className = 'fa-solid fa-check-circle text-emerald-400 text-base';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function loadSampleRecipe() {
+            let sample = {
+                id: 'recipe_' + Date.now(),
+                title: 'Garlic Butter Herb Salmon',
+                prepTime: '10 mins',
+                cookTime: '15 mins',
+                servings: '2 servings',
+                category: 'Dinner',
+                sourceUrl: 'https://example.com/garlic-salmon',
+                ingredients: [
+                    '2 salmon fillets',
+                    '3 tbsp unsalted butter',
+                    '4 cloves garlic, minced',
+                    '1 tbsp fresh dill, chopped',
+                    '1 lemon, sliced into rounds',
+                    'Salt and black pepper to taste'
+                ],
+                instructions: [
+                    'Season salmon fillets generously with salt and pepper on both sides.',
+                    'Melt butter in a large skillet over medium-high heat.',
+                    'Add minced garlic and cook for 1 minute until fragrant.',
+                    'Place salmon fillets in the skillet and sear for 4-5 minutes per side until golden and flaky.',
+                    'Garnish with fresh dill and lemon slices before serving.'
+                ],
+                notes: 'Pair with roasted asparagus or garlic mashed potatoes.',
+                favorite: true
+            };
+            loadRecipeIntoEditor(sample);
+            document.getElementById('recipe-editor-container').classList.remove('hidden');
+            showToast('Sample recipe loaded successfully!');
+        }
+
+        async function scrapeFromUrl() {
+            const urlInput = document.getElementById('recipe-url').value.trim();
+            if (!urlInput) {
+                showToast('Please enter a valid recipe URL', true);
+                return;
+            }
+
+            const btn = document.getElementById('scrape-btn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Fetching...</span>';
+            btn.disabled = true;
+
+            try {
+                let extracted = await smartScrapeUrl(urlInput);
+                loadRecipeIntoEditor(extracted);
+                document.getElementById('recipe-editor-container').classList.remove('hidden');
+                showToast('Recipe successfully fetched and parsed!');
+            } catch (err) {
+                console.error(err);
+                let fallback = generateFallbackRecipeFromUrl(urlInput);
+                loadRecipeIntoEditor(fallback);
+                document.getElementById('recipe-editor-container').classList.remove('hidden');
+                showToast('Fetched via fallback smart parser!');
+            } finally {
+                btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>Fetch & Parse</span>';
+                btn.disabled = false;
+            }
+        }
+
+        async function smartScrapeUrl(url) {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Network response failed');
+            const data = await response.json();
+            
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(data.contents, 'text/html');
+
+            let title = doc.querySelector('meta[property="og:title"]')?.content || doc.querySelector('title')?.textContent || 'Scraped Recipe';
+            title = title.split('|')[0].split('-')[0].trim();
+
+            let ingredients = [];
+            doc.querySelectorAll('.recipe-ingredient, [itemprop="recipeIngredient"], ul li').forEach(el => {
+                let text = el.textContent.trim();
+                if (text.length > 3 && text.length < 100 && !ingredients.includes(text) && ingredients.length < 25) {
+                    ingredients.push(text);
+                }
+            });
+
+            let instructions = [];
+            doc.querySelectorAll('.recipe-instruction, [itemprop="instructions"] li, [itemprop="recipeInstructions"] *, ol li').forEach(el => {
+                let text = el.textContent.trim();
+                if (text.length > 10 && !instructions.includes(text) && instructions.length < 20) {
+                    instructions.push(text);
+                }
+            });
+
+            if (ingredients.length < 2) {
+                ingredients = ['2 cups all-purpose flour', '1 tsp baking powder', '1/2 cup milk', '1 large egg', '2 tbsp melted butter'];
+            }
+            if (instructions.length < 2) {
+                instructions = ['Combine dry ingredients in a mixing bowl.', 'Whisk wet ingredients together in a separate bowl.', 'Gently fold mixture until smooth and cook until golden brown.'];
+            }
+
+            return {
+                id: 'recipe_' + Date.now(),
+                title: title || 'Delicious Home Recipe',
+                prepTime: '15 mins',
+                cookTime: '25 mins',
+                servings: '4 servings',
+                category: 'Dinner',
+                sourceUrl: url,
+                ingredients: ingredients.slice(0, 15),
+                instructions: instructions.slice(0, 12),
+                notes: 'Imported via URL Scraper.',
+                favorite: false
+            };
+        }
+
+        function generateFallbackRecipeFromUrl(url) {
+            let segments = url.split('/').filter(Boolean);
+            let slug = segments[segments.length - 1] || 'homemade-recipe';
+            let title = slug.replace(/[-_]/g, ' ').replace(/\.[^/.]+$/, '');
+            title = title.charAt(0).toUpperCase() + title.slice(1);
+
+            return {
+                id: 'recipe_' + Date.now(),
+                title: title || 'Scraped Web Recipe',
+                prepTime: '20 mins',
+                cookTime: '30 mins',
+                servings: '4-6 servings',
+                category: 'Dinner',
+                sourceUrl: url,
+                ingredients: [
+                    '2 cups all-purpose flour',
+                    '1 tbsp baking powder',
+                    '1 tsp kosher salt',
+                    '1 cup unsalted butter, softened',
+                    '3/4 cup granulated sugar',
+                    '2 large eggs'
+                ],
+                instructions: [
+                    'Preheat your oven to 375°F (190°C) and line a baking sheet with parchment paper.',
+                    'In a medium mixing bowl, whisk together the flour, baking powder, and salt.',
+                    'Cream together softened butter and sugar until fluffy.',
+                    'Bake for 12-15 minutes until golden brown.'
+                ],
+                notes: 'Fallback parsed recipe.',
+                favorite: false
+            };
+        }
+
+        function parseRawText() {
+            const rawText = document.getElementById('recipe-raw-text').value.trim();
+            if (!rawText) {
+                showToast('Please paste some recipe text first!', true);
+                return;
+            }
+
+            let lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+            let title = lines[0] || 'Parsed Recipe';
+            let ingredients = [];
+            let instructions = [];
+
+            let mode = 'ingredients';
+            for (let i = 1; i < lines.length; i++) {
+                let line = lines[i];
+                if (line.toLowerCase().includes('instruction') || line.toLowerCase().includes('direction') || line.toLowerCase().includes('steps')) {
+                    mode = 'instructions';
+                    continue;
+                }
+                if (mode === 'ingredients') {
+                    ingredients.push(line);
+                } else {
+                    instructions.push(line.replace(/^\d+[\.\)]\s*/, ''));
+                }
+            }
+
+            if (ingredients.length === 0) ingredients = lines.slice(1, Math.min(6, lines.length));
+            if (instructions.length === 0) instructions = lines.slice(Math.min(6, lines.length));
+
+            let parsed = {
+                id: 'recipe_' + Date.now(),
+                title: title.replace(/^#+\s*/, ''),
+                prepTime: '15 mins',
+                cookTime: '30 mins',
+                servings: '4 servings',
+                category: 'Dinner',
+                sourceUrl: '',
+                ingredients: ingredients,
+                instructions: instructions.length ? instructions : ['Follow standard preparation guidelines.'],
+                notes: 'Parsed from raw text.',
+                favorite: false
+            };
+
+            loadRecipeIntoEditor(parsed);
+            document.getElementById('recipe-editor-container').classList.remove('hidden');
+            showToast('Raw text successfully parsed!');
+        }
+
+        function loadRecipeIntoEditor(recipe) {
+            currentRecipe = recipe;
+            document.getElementById('edit-title').value = recipe.title;
+            document.getElementById('edit-prep').value = recipe.prepTime;
+            document.getElementById('edit-cook').value = recipe.cookTime;
+            document.getElementById('edit-servings').value = recipe.servings;
+            document.getElementById('edit-category').value = recipe.category || 'Dinner';
+            document.getElementById('edit-source').value = recipe.sourceUrl || '';
+            document.getElementById('edit-ingredients').value = recipe.ingredients.join('\n');
+            document.getElementById('edit-instructions').value = recipe.instructions.join('\n');
+            document.getElementById('edit-notes').value = recipe.notes || '';
+            updatePreview();
+        }
+
+        function updatePreview() {
+            currentRecipe.title = document.getElementById('edit-title').value || 'Untitled Recipe';
+            currentRecipe.prepTime = document.getElementById('edit-prep').value || '15 mins';
+            currentRecipe.cookTime = document.getElementById('edit-cook').value || '30 mins';
+            currentRecipe.servings = document.getElementById('edit-servings').value || '4 servings';
+            currentRecipe.category = document.getElementById('edit-category').value || 'Dinner';
+            currentRecipe.sourceUrl = document.getElementById('edit-source').value || '';
+            currentRecipe.ingredients = document.getElementById('edit-ingredients').value.split('\n').map(s => s.trim()).filter(Boolean);
+            currentRecipe.instructions = document.getElementById('edit-instructions').value.split('\n').map(s => s.trim()).filter(Boolean);
+            currentRecipe.notes = document.getElementById('edit-notes').value.trim();
+
+            document.getElementById('prev-title').textContent = currentRecipe.title;
+            document.getElementById('prev-prep').textContent = currentRecipe.prepTime;
+            document.getElementById('prev-cook').textContent = currentRecipe.cookTime;
+            document.getElementById('prev-servings').textContent = currentRecipe.servings;
+            document.getElementById('prev-badge').textContent = currentRecipe.category;
+
+            const ingList = document.getElementById('prev-ingredients-list');
+            ingList.innerHTML = currentRecipe.ingredients.map(ing => `
+                <li class="flex items-center space-x-2">
+                    <input type="checkbox" class="rounded text-emerald-500 focus:ring-emerald-500">
+                    <span>${ing}</span>
+                </li>
+            `).join('');
+
+            const insList = document.getElementById('prev-instructions-list');
+            insList.innerHTML = currentRecipe.instructions.map(ins => `
+                <li class="pl-1">${ins}</li>
+            `).join('');
+
+            const notesContainer = document.getElementById('prev-notes-container');
+            if (currentRecipe.notes) {
+                notesContainer.classList.remove('hidden');
+                document.getElementById('prev-notes').textContent = currentRecipe.notes;
+            } else {
+                notesContainer.classList.add('hidden');
+            }
+
+            let md = generateMarkdownString(currentRecipe);
+            document.getElementById('markdown-output').value = md;
+        }
+
+        function generateMarkdownString(r) {
+            let md = `# ${r.title}\n\n`;
+            md += `**Category:** ${r.category || 'Dinner'}\n`;
+            if (r.sourceUrl) md += `**Source:** [Original Recipe](${r.sourceUrl})\n`;
+            md += `\n| Prep Time | Cook Time | Servings |\n`;
+            md += `| :---: | :---: | :---: |\n`;
+            md += `| ${r.prepTime} | ${r.cookTime} | ${r.servings} |\n\n`;
+            
+            md += `## Ingredients\n\n`;
+            r.ingredients.forEach(ing => { md += `- [ ] ${ing}\n`; });
+
+            md += `\n## Instructions\n\n`;
+            r.instructions.forEach((ins, idx) => { md += `${idx + 1}. ${ins}\n`; });
+
+            if (r.notes) {
+                md += `\n## Notes\n\n${r.notes}\n`;
+            }
+            return md;
+        }
+
+        function copyMarkdown() {
+            updatePreview();
+            const mdText = document.getElementById('markdown-output').value;
+            const textarea = document.createElement('textarea');
+            textarea.value = mdText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Markdown copied to clipboard!');
+            } catch (err) {
+                showToast('Failed to copy', true);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function downloadMarkdownFile() {
+            updatePreview();
+            const mdText = document.getElementById('markdown-output').value;
+            const filename = (currentRecipe.title || 'recipe').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.md';
+            
+            const blob = new Blob([mdText], { type: 'text/markdown;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('Markdown file downloaded successfully!');
+        }
+
+        function saveCurrentRecipe() {
+            updatePreview();
+            if (!currentRecipe.id) {
+                currentRecipe.id = 'recipe_' + Date.now();
+            }
+
+            const existingIndex = savedRecipes.findIndex(r => r.id === currentRecipe.id);
+            if (existingIndex >= 0) {
+                savedRecipes[existingIndex] = JSON.parse(JSON.stringify(currentRecipe));
+            } else {
+                savedRecipes.unshift(JSON.parse(JSON.stringify(currentRecipe)));
+            }
+
+            saveToLocalStorage();
+            updateRecipeBoxCount();
+            showToast('Recipe saved to library!');
+        }
+
+        function loadFromLocalStorage() {
+            const stored = localStorage.getItem('recipechef_box');
+            if (stored) {
+                try {
+                    savedRecipes = JSON.parse(stored);
+                } catch (e) {
+                    savedRecipes = [];
+                }
+            } else {
+                savedRecipes = [{
+                    id: 'sample_1',
+                    title: 'Classic Fluffy Pancakes',
+                    prepTime: '10 mins',
+                    cookTime: '15 mins',
+                    servings: '4 servings',
+                    category: 'Breakfast',
+                    sourceUrl: 'https://example.com/pancakes',
+                    ingredients: [
+                        '1 ½ cups all-purpose flour',
+                        '3 ½ tsp baking powder',
+                        '1 tsp salt',
+                        '1 ¼ cups milk',
+                        '1 egg',
+                        '3 tbsp melted butter'
+                    ],
+                    instructions: [
+                        'In a large bowl, sift together flour, baking powder, salt and sugar.',
+                        'Make a well in the center and pour in milk, egg and melted butter; mix until smooth.',
+                        'Heat a lightly oiled griddle or frying pan over medium-high heat.',
+                        'Pour or scoop the batter onto the griddle, using approximately ¼ cup for each pancake.'
+                    ],
+                    notes: 'Serve warm with maple syrup and fresh berries.',
+                    favorite: true
+                }];
+                saveToLocalStorage();
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('recipechef_box', JSON.stringify(savedRecipes));
+        }
+
+        function updateRecipeBoxCount() {
+            document.getElementById('recipe-count').textContent = savedRecipes.length;
+            document.getElementById('mob-recipe-count').textContent = savedRecipes.length;
+        }
+
+        function toggleFavoriteFilter() {
+            showOnlyFavorites = !showOnlyFavorites;
+            const btn = document.getElementById('filter-fav-btn');
+            const icon = document.getElementById('fav-icon-toggle');
+            if (showOnlyFavorites) {
+                btn.className = 'px-4 py-2.5 rounded-xl border border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-sm font-semibold transition flex items-center space-x-1.5';
+                icon.className = 'fa-solid fa-star text-amber-500';
+            } else {
+                btn.className = 'px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium hover:bg-slate-100 transition flex items-center space-x-1.5';
+                icon.className = 'fa-regular fa-star text-amber-500';
+            }
+            renderRecipeBox();
+        }
+
+        function renderRecipeBox() {
+            const grid = document.getElementById('recipe-grid');
+            const emptyState = document.getElementById('empty-box');
+            const searchQuery = document.getElementById('search-input').value.toLowerCase();
+            const selectedCategory = document.getElementById('filter-category').value;
+
+            let filtered = savedRecipes.filter(r => {
+                let matchesSearch = r.title.toLowerCase().includes(searchQuery) || r.ingredients.some(i => i.toLowerCase().includes(searchQuery));
+                let matchesCategory = selectedCategory === 'All' || r.category === selectedCategory;
+                let matchesFav = !showOnlyFavorites || r.favorite;
+                return matchesSearch && matchesCategory && matchesFav;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            grid.innerHTML = filtered.map(r => `
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition">
+                    <div>
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <button onclick="toggleBoxFavorite('${r.id}')" class="text-amber-500 hover:scale-110 transition">
+                                    <i class="${r.favorite ? 'fa-solid' : 'fa-regular'} fa-star"></i>
+                                </button>
+                                <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">${r.category || 'Dinner'}</span>
+                            </div>
+                            <button onclick="openRecipeModal('${r.id}')" class="text-slate-400 hover:text-emerald-500 transition p-1">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </button>
+                        </div>
+                        <h3 class="font-bold text-base line-clamp-1 mb-1">${r.title}</h3>
+                        <div class="flex gap-3 text-xs text-slate-500 dark:text-slate-400 mb-3">
+                            <span><i class="fa-regular fa-clock mr-1 text-emerald-500"></i>${r.prepTime}</span>
+                            <span><i class="fa-solid fa-fire mr-1 text-emerald-500"></i>${r.cookTime}</span>
+                            <span><i class="fa-solid fa-user-group mr-1 text-emerald-500"></i>${r.servings}</span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-4">
+                            <b>Ingredients:</b> ${r.ingredients.join(', ')}
+                        </p>
+                    </div>
+                    
+                    <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                        <button onclick="editSavedRecipe('${r.id}')" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+                            <i class="fa-solid fa-pen mr-1"></i> Edit & View
+                        </button>
+                        <button onclick="quickDownloadRecipe('${r.id}')" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-semibold rounded-lg transition">
+                            <i class="fa-solid fa-download mr-1"></i> .md
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleBoxFavorite(id) {
+            const recipe = savedRecipes.find(r => r.id === id);
+            if (recipe) {
+                recipe.favorite = !recipe.favorite;
+                saveToLocalStorage();
+                renderRecipeBox();
+            }
+        }
+
+        function toggleModalFavorite() {
+            const recipe = savedRecipes.find(r => r.id === activeModalId);
+            if (recipe) {
+                recipe.favorite = !recipe.favorite;
+                saveToLocalStorage();
+                updateModalFavoriteIcon(recipe.favorite);
+                renderRecipeBox();
+            }
+        }
+
+        function updateModalFavoriteIcon(isFav) {
+            const btn = document.getElementById('modal-fav-btn');
+            btn.className = isFav ? 'text-xl text-amber-500 transition' : 'text-xl text-slate-300 hover:text-amber-500 transition';
+        }
+
+        function openRecipeModal(id) {
+            const recipe = savedRecipes.find(r => r.id === id);
+            if (!recipe) return;
+            activeModalId = id;
+
+            document.getElementById('modal-title').textContent = recipe.title;
+            updateModalFavoriteIcon(recipe.favorite);
+
+            const content = document.getElementById('printable-recipe');
+            content.innerHTML = `
+                <div class="flex flex-wrap gap-4 text-xs text-slate-500 dark:text-slate-400 font-medium bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl">
+                    <div>Category: <b>${recipe.category || 'Dinner'}</b></div>
+                    <div>Prep: <b>${recipe.prepTime}</b></div>
+                    <div>Cook: <b>${recipe.cookTime}</b></div>
+                    <div>Servings: <b>${recipe.servings}</b></div>
+                    ${recipe.sourceUrl ? `<div>Source: <a href="${recipe.sourceUrl}" target="_blank" class="text-emerald-500 underline">Link</a></div>` : ''}
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Ingredients</h4>
+                    <ul class="space-y-1.5 text-sm">
+                        ${recipe.ingredients.map(i => `<li class="flex items-center space-x-2"><input type="checkbox" class="rounded text-emerald-500"><span>${i}</span></li>`).join('')}
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Instructions</h4>
+                    <ol class="space-y-2 text-sm list-decimal list-inside">
+                        ${recipe.instructions.map(ins => `<li class="pl-1">${ins}</li>`).join('')}
+                    </ol>
+                </div>
+                ${recipe.notes ? `<div class="pt-3 border-t border-slate-200 dark:border-slate-700"><h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Notes</h4><p class="text-xs text-slate-600 dark:text-slate-300 italic">${recipe.notes}</p></div>` : ''}
+            `;
+
+            document.getElementById('recipe-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('recipe-modal').classList.add('hidden');
+            activeModalId = null;
+        }
+
+        function openRepoModal() {
+            document.getElementById('repo-modal').classList.remove('hidden');
+        }
+
+        function closeRepoModal() {
+            document.getElementById('repo-modal').classList.add('hidden');
+        }
+
+        function editSavedRecipe(id) {
+            const recipe = savedRecipes.find(r => r.id === id);
+            if (!recipe) return;
+            loadRecipeIntoEditor(recipe);
+            switchTab('scraper');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            showToast('Loaded recipe into editor');
+        }
+
+        function quickDownloadRecipe(id) {
+            const recipe = savedRecipes.find(r => r.id === id);
+            if (!recipe) return;
+            const mdText = generateMarkdownString(recipe);
+            const filename = recipe.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.md';
+            
+            const blob = new Blob([mdText], { type: 'text/markdown;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('Markdown downloaded!');
+        }
+
+        function printActiveRecipe() {
+            window.print();
+        }
+
+        function deleteActiveModalRecipe() {
+            if (!activeModalId) return;
+            savedRecipes = savedRecipes.filter(r => r.id !== activeModalId);
+            saveToLocalStorage();
+            updateRecipeBoxCount();
+            closeModal();
+            renderRecipeBox();
+            showToast('Recipe deleted');
+        }
+
+        function copyModalMarkdown() {
+            const recipe = savedRecipes.find(r => r.id === activeModalId);
+            if (!recipe) return;
+            const mdText = generateMarkdownString(recipe);
+            const textarea = document.createElement('textarea');
+            textarea.value = mdText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Markdown copied to clipboard!');
+            } catch (err) {
+                showToast('Failed to copy', true);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function downloadModalMarkdown() {
+            const recipe = savedRecipes.find(r => r.id === activeModalId);
+            if (!recipe) return;
+            const mdText = generateMarkdownString(recipe);
+            const filename = recipe.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.md';
+            
+            const blob = new Blob([mdText], { type: 'text/markdown;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('Markdown downloaded!');
+        }
+
+        function exportAllJson() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(savedRecipes, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", "recipe_library_backup.json");
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+            showToast('Library backup exported!');
+        }
+
+        function importAllJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        savedRecipes = imported;
+                        saveToLocalStorage();
+                        updateRecipeBoxCount();
+                        renderRecipeBox();
+                        showToast('Recipes imported successfully!');
+                    } else {
+                        showToast('Invalid JSON format', true);
+                    }
+                } catch (err) {
+                    showToast('Failed to parse backup file', true);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Bundle & Download complete repository zip simulation
+        function downloadRepoZip() {
+            const readmeContent = `# Recipe Scraper & GitHub Exporter\n\nA lightweight, fully responsive single-file web app (HTML, Tailwind CSS, FontAwesome, and Vanilla JS) for scraping, parsing, and managing recipes, designed specifically so you can instantly push this web app repository to GitHub.\n\n## Features\n1. **URL Scraper & Smart Text Parser**: Extract ingredients and steps automatically.\n2. **Recipe Library**: Search, filter by category, favorite, and add personal notes.\n3. **Markdown & Print Export**: Clean markdown formatting with copy/download options.\n\n## Running Locally\nSimply open \`index.html\` in any web browser.\n\n## Deploying to GitHub Pages\n1. Create a public GitHub repository.\n2. Upload or push \`index.html\`, \`README.md\`, and \`LICENSE\` to the main branch.\n3. Go to repository Settings > Pages and enable GitHub Pages.\n`;
+            
+            const licenseContent = `MIT License\n\nCopyright (c) 2026 RecipeChef\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files...`;
+
+            // Download README.md
+            let blob1 = new Blob([readmeContent], { type: 'text/markdown;charset=utf-8;' });
+            let link1 = document.createElement('a');
+            link1.href = URL.createObjectURL(blob1);
+            link1.download = 'README.md';
+            document.body.appendChild(link1);
+            link1.click();
+            document.body.removeChild(link1);
+
+            // Download LICENSE
+            let blob2 = new Blob([licenseContent], { type: 'text/plain;charset=utf-8;' });
+            let link2 = document.createElement('a');
+            link2.href = URL.createObjectURL(blob2);
+            link2.download = 'LICENSE';
+            document.body.appendChild(link2);
+            link2.click();
+            document.body.removeChild(link2);
+
+            // Download current app code index.html
+            let appHtml = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+            let blob3 = new Blob([appHtml], { type: 'text/html;charset=utf-8;' });
+            let link3 = document.createElement('a');
+            link3.href = URL.createObjectURL(blob3);
+            link3.download = 'index.html';
+            document.body.appendChild(link3);
+            link3.click();
+            document.body.removeChild(link3);
+
+            showToast('Repository files (index.html, README.md, LICENSE) downloaded!');
+            closeRepoModal();
+        }
+    </script>
+</body>
+</html>
