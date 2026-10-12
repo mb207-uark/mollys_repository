@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Scraper</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+        input[type="text"] { width: 70%; padding: 8px; }
+        button { padding: 8px 16px; }
+        .result { margin-top: 20px; background: #f4f4f4; padding: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Python Recipe Scraper</h1>
+    <input type="text" id="recipeUrl" placeholder="Paste recipe URL here...">
+    <button onclick="scrape()">Scrape</button>
+    
+    <div id="output" class="result" style="display:none;">
+        <h2 id="resTitle"></h2>
+        <h3>Ingredients:</h3>
+        <ul id="resIngredients"></ul>
+    </div>
+
+    <script>
+        async function scrape() {
+            const url = document.getElementById('recipeUrl').value;
+            const output = document.getElementById('output');
+            if (!url) return alert('Please enter a URL');
+            
+            output.style.display = 'block';
+            document.getElementById('resTitle').innerText = 'Loading...';
+            document.getElementById('resIngredients').innerHTML = '';
+
+            const response = await fetch('/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            const data = await response.json();
+            
+            if (data.error) {
+                document.getElementById('resTitle').innerText = 'Error: ' + data.error;
+                return;
+            }
+
+            document.getElementById('resTitle').innerText = data.title;
+            const list = document.getElementById('resIngredients');
+            data.ingredients.forEach(ing => {
+                const li = document.createElement('li');
+                li.innerText = ing;
+                list.appendChild(li);
+            });
+        }
+    </script>
+</body>
+</html>
